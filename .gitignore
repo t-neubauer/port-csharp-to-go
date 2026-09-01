@@ -31,5 +31,25 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# Presentation Folder
+# .NET build and user-specific files
+[Bb]in/
+[Oo]bj/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.pdb
+*.cache
+*.log
+*.nupkg
+*.snupkg
+*.trx
+*.coverage
+*.coveragexml
+*.publish.xml
+
+# Excluded folders
 /Presentation/*
