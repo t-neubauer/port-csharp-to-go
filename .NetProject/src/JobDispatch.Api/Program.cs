@@ -1,3 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using JobDispatch.Api.Models;
+using JobDispatch.Api.Services;
+using Microsoft.Extensions.Options;
 
 namespace JobDispatch.Api;
 
@@ -7,43 +12,109 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // Add services to the container.
-        builder.Services.AddAuthorization();
-
-        // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
+
+        builder.Services.AddOptions<JobDispatchOptions>()
+            .Bind(builder.Configuration.GetSection(JobDispatchOptions.SectionName));
+        builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<JobDispatchOptions>>().Value);
+        builder.Services.AddSingleton<IJobRepository, InMemoryJobRepository>();
+        builder.Services.AddSingleton<IJobService, JobService>();
+        builder.Services.AddHostedService<JobWorkerService>();
+
+        builder.Services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        });
 
         var app = builder.Build();
 
-        // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())
         {
             app.MapOpenApi();
         }
 
-        app.UseHttpsRedirection();
+        app.MapGet("/health/live", () => Results.Ok(new { status = "live", timestamp = DateTimeOffset.UtcNow }));
+        app.MapGet("/health/ready", () => Results.Ok(new { status = "ready", timestamp = DateTimeOffset.UtcNow }));
 
-        app.UseAuthorization();
-
-        var summaries = new[]
+        app.MapPost("/jobs", async (CreateJobRequest request, IJobService jobService) =>
         {
-            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-        };
+            try
+            {
+                var created = await jobService.CreateJobAsync(request);
+                return Results.Created($"/jobs/{created.Id}", created);
+            }
+            catch (JobDispatchException ex)
+            {
+                return ToErrorResult(ex);
+            }
+        });
 
-        app.MapGet("/weatherforecast", (HttpContext httpContext) =>
+        app.MapGet("/jobs/{id:guid}", async (Guid id, IJobService jobService) =>
         {
-            var forecast =  Enumerable.Range(1, 5).Select(index =>
-                new WeatherForecast
-                {
-                    Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                    TemperatureC = Random.Shared.Next(-20, 55),
-                    Summary = summaries[Random.Shared.Next(summaries.Length)]
-                })
-                .ToArray();
-            return forecast;
-        })
-        .WithName("GetWeatherForecast");
+            try
+            {
+                var job = await jobService.GetJobAsync(id);
+                return Results.Ok(job);
+            }
+            catch (JobDispatchException ex)
+            {
+                return ToErrorResult(ex);
+            }
+        });
+
+        app.MapPost("/jobs/{id:guid}/claim", async (Guid id, ClaimJobRequest request, IJobService jobService) =>
+        {
+            try
+            {
+                var claimed = await jobService.ClaimJobAsync(id, request);
+                return Results.Ok(claimed);
+            }
+            catch (JobDispatchException ex)
+            {
+                return ToErrorResult(ex);
+            }
+        });
+
+        app.MapPost("/jobs/{id:guid}/complete", async (Guid id, CompleteJobRequest request, IJobService jobService) =>
+        {
+            try
+            {
+                var completed = await jobService.CompleteJobAsync(id, request.Message);
+                return Results.Ok(completed);
+            }
+            catch (JobDispatchException ex)
+            {
+                return ToErrorResult(ex);
+            }
+        });
+
+        app.MapPost("/jobs/{id:guid}/fail", async (Guid id, FailJobRequest request, IJobService jobService) =>
+        {
+            try
+            {
+                var result = await jobService.FailJobAsync(id, request);
+                return Results.Ok(result);
+            }
+            catch (JobDispatchException ex)
+            {
+                return ToErrorResult(ex);
+            }
+        });
 
         app.Run();
+    }
+
+    private static IResult ToErrorResult(JobDispatchException ex)
+    {
+        var response = new ErrorResponse { Code = ex.Code, Message = ex.Message };
+
+        return ex.StatusCode switch
+        {
+            StatusCodes.Status404NotFound => Results.NotFound(response),
+            StatusCodes.Status409Conflict => Results.Conflict(response),
+            _ => Results.BadRequest(response)
+        };
     }
 }
