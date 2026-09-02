@@ -13,6 +13,7 @@ import (
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/httpapi"
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/repository"
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/service"
+	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/worker"
 )
 
 func main() {
@@ -24,6 +25,10 @@ func main() {
 		RetryBackoff:       30 * time.Second,
 	})
 	handler := httpapi.NewHandler(jobService, logger)
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
+	jobWorker := worker.New(jobService, 15*time.Minute, "background-worker", false, logger)
+	go jobWorker.Run(workerCtx)
 
 	server := &http.Server{
 		Addr:              ":8080",
@@ -43,6 +48,7 @@ func main() {
 	}()
 
 	<-ctx.Done()
+	cancelWorker()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {

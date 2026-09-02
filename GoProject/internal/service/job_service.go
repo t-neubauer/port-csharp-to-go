@@ -16,6 +16,12 @@ var ErrJobNotFound = errors.New("job not found")
 var ErrValidation = errors.New("validation error")
 var ErrInvalidState = errors.New("invalid job state")
 
+func IsExpectedJobError(err error) bool {
+	return errors.Is(err, ErrJobNotFound) ||
+		errors.Is(err, ErrValidation) ||
+		errors.Is(err, ErrInvalidState)
+}
+
 type Options struct {
 	DefaultMaxAttempts int
 	LeaseDuration      time.Duration
@@ -198,6 +204,45 @@ func (s *JobService) FailJob(ctx context.Context, id string, request domain.Fail
 
 func (s *JobService) GetEligibleJobs(ctx context.Context) ([]domain.Job, error) {
 	return s.repository.GetEligible(ctx, time.Now().UTC())
+}
+
+func (s *JobService) ProcessQueuedJob(ctx context.Context, id string, workerName string) (domain.Job, error) {
+	job, err := s.GetJob(ctx, id)
+	if err != nil {
+		return domain.Job{}, err
+	}
+	if job.Status == domain.StatusCompleted || job.Status == domain.StatusFailed {
+		return job, nil
+	}
+	if job.Status == domain.StatusQueued && job.NextAttemptAt != nil && job.NextAttemptAt.After(time.Now().UTC()) {
+		return job, nil
+	}
+
+	claimed, err := s.ClaimJob(ctx, id, domain.ClaimJobRequest{
+		LeaseOwner: workerName,
+	})
+	if err != nil {
+		return domain.Job{}, err
+	}
+
+	switch {
+	case strings.Contains(claimed.JobType, "fail") || strings.Contains(claimed.Name, "fail"):
+		transient := true
+		return s.FailJob(ctx, id, domain.FailJobRequest{
+			Error:     "worker failure simulated.",
+			Transient: &transient,
+		})
+	case strings.Contains(claimed.JobType, "retry") || strings.Contains(claimed.Name, "retry"):
+		transient := true
+		return s.FailJob(ctx, id, domain.FailJobRequest{
+			Error:     "transient retry required.",
+			Transient: &transient,
+		})
+	default:
+		return s.CompleteJob(ctx, id, domain.CompleteJobRequest{
+			Message: "processed by worker",
+		})
+	}
 }
 
 func failureMessage(request domain.FailJobRequest) string {

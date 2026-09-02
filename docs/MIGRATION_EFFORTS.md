@@ -44,7 +44,7 @@ Use short examples and link to source files rather than copying large code block
 | Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests for claim/complete/retry/idempotency | In progress |
 | Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Repository-backed service tests | In progress |
 | HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Create/read/claim/complete contract tests | In progress |
-| Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | Not started |
+| Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | In progress |
 | Health and operations | Health mappings and basic logging | `GoProject/internal/health/`, middleware | Health/shutdown/smoke checks | Not started |
 
 ## Go concepts used in this project
@@ -115,6 +115,33 @@ Expected failures are returned as Go `error` values and classified with `errors.
 - Test: `Set-Location GoProject; go test ./...`
 - Result: all Go tests pass, including claim conflict, retry, completion idempotency, and HTTP lifecycle coverage.
 - Known gap: the background worker is the next slice.
+
+## 2026-09-02 — Background worker slice
+
+**Reference behavior**
+
+The .NET hosted worker polls eligible jobs, processes them through the application service, continues after expected job failures, and exits when the host cancellation token is signaled.
+
+**Go implementation**
+
+- `internal/worker/worker.go` uses a goroutine-friendly `time.Ticker` loop.
+- `context.Context` controls cancellation and causes the worker to stop promptly.
+- `main.go` starts the worker explicitly and cancels it during process shutdown.
+- `JobService.ProcessQueuedJob` applies the same deterministic normal, retry, and fail rules as the .NET reference.
+
+**What is different and why**
+
+Go does not provide an ASP.NET-style hosted-service abstraction here. The worker is a small explicit component whose `Run` method owns its ticker and select loop. Expected domain errors are logged and do not terminate the process.
+
+**Parity evidence**
+
+- Test: `Set-Location GoProject; go test ./...`
+- Result: all Go tests pass, including worker completion, retry scheduling, and cancellation.
+- Known gap: worker configuration is currently wired with presentation defaults; environment parsing and a process smoke test are next.
+
+**Learning notes**
+
+`time.Ticker` sends periodic events on a channel. A `select` waits for either the next tick or `ctx.Done()`, which is the idiomatic Go pattern for cancelable background work.
 
 ## Entry template
 
