@@ -23,7 +23,7 @@ flowchart LR
     Service -->|scheduled job processing| Worker
 ```
 
-This baseline is intentionally small but representative of the migration target: a web API, a durable in-memory job repository, background polling, and state transitions for queued, claimed, completed, and failed jobs.
+This baseline is intentionally small but representative of the presentation scope: a web API, a deterministic in-memory job repository, background polling, and state transitions for queued, claimed, completed, and failed jobs.
 
 ## Job state machine
 
@@ -210,3 +210,13 @@ The worker polls for eligible jobs, claims them, and then either completes or fa
 - The request model accepts the canonical `jobType` and `maxAttempts` payload shape, and also supports compatibility aliases used by the service layer.
 - Retry logic is bounded and deterministic: transient failures retry until `maxAttempts` is exhausted.
 - Errors return consistent payloads with a code and message, and invalid state transitions produce `4xx` responses.
+
+## CONSIDERATIONS BEYOND PROJECT SCOPE:
+
+This reference implementation intentionally does not provide the broader production features that may be discussed in the presentation:
+
+- PostgreSQL persistence, schema migrations, and database-backed readiness.
+- Transactional concurrent claiming and lease-recovery integration tests.
+- Metrics, distributed tracing, and extensive correlation infrastructure.
+- Docker, Docker Compose, non-root packaging, and image comparisons.
+- Authentication, external queues, Kubernetes, load testing, and exactly-once processing.

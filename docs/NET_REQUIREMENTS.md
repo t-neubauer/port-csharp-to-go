@@ -6,7 +6,7 @@ Prepared by Prometheus with architecture support from Archie.
 
 This document defines the required behavior of the .NET baseline application that will later be ported to Go. The .NET version is the reference implementation and must behave according to the agreed contract, even before the Go version is built.
 
-The purpose of this baseline is not to create a generic job system, but to provide a stable, testable, and production-shaped API that exercises the migration concerns called out in the project plan.
+The purpose of this baseline is not to create a generic job system, but to provide a small, stable, testable API that demonstrates the most relevant .NET-to-Go migration boundaries in a short presentation.
 
 ## 2. Product Summary
 
@@ -17,7 +17,7 @@ The application is a small job dispatch service with the following operating mod
 - Workers process claimed jobs.
 - Jobs may succeed, fail transiently, or reach terminal failure after retry exhaustion.
 - The system exposes both REST endpoints and health probe endpoints.
-- Persistent storage and worker lifecycle behavior are part of the required MVP.
+- In-memory storage and worker lifecycle behavior are part of the presentation scope.
 
 ## 3. Scope
 
@@ -25,14 +25,13 @@ The application is a small job dispatch service with the following operating mod
 
 - HTTP API for job lifecycle operations
 - Domain state transitions
-- SQL persistence and migrations
+- Repository abstraction with deterministic in-memory storage
 - Background worker loop
 - Retry policy and lease-based claiming
 - Validation and idempotent terminal operations
-- Health checks and startup configuration validation
-- Structured logs and basic metrics
-- Dockerized local runtime
-- Test coverage for unit and integration behavior
+- Health checks and basic configuration
+- Basic structured logs
+- Focused unit and HTTP contract tests
 
 ### Out of Scope
 
@@ -74,10 +73,9 @@ The system shall allow a queued job to be claimed for processing.
 Required behavior:
 
 - `POST /jobs/{id}/claim` attempts to claim a queued job.
-- Claiming must be transactional.
 - A claim must carry a lease with expiry.
 - A claimed job must not be claimed by another worker until the lease expires.
-- Concurrent attempts to claim the same queued job must not produce conflicting state.
+- The in-memory implementation must behave deterministically for the demonstrated scenarios.
 
 ### 4.4 Job Completion
 
@@ -168,24 +166,7 @@ The service shall follow an explicit job state machine.
 
 ## 7. Data and Persistence Requirements
 
-The service shall use a relational database and migration-based schema management.
-
-Required persistence concerns:
-
-- job table with status, attempt count, max attempts, and timing fields
-- claim lease metadata
-- schema migration support
-- transactional claim behavior
-- repository boundary separating persistence concerns from HTTP and domain layers
-
-The schema must include, at minimum:
-
-- `attempt_count`
-- `max_attempts`
-- `next_attempt_at`
-- `lease_owner`
-- `lease_expires_at`
-- final or terminal timestamps as required by the design
+The presentation implementation shall use a repository boundary with deterministic in-memory storage. The boundary must keep domain behavior independent from storage so that a relational implementation can be added later without changing the API or state machine.
 
 ## 8. Configuration and Operations Requirements
 
@@ -195,32 +176,19 @@ The application shall support environment-based configuration with explicit vali
 
 Required configuration concerns:
 
-- database connection values
 - max attempts
 - retry backoff values
 - worker poll interval
-- health endpoint settings
-- startup validation for required values
+- worker enabled/disabled behavior
 
 ### Observability
 
 The application must emit structured logs with:
 
 - timestamps
-- request correlation identifiers
 - job identifiers where relevant
 - action names
 - operational status markers
-
-### Metrics
-
-The application shall expose named counters for:
-
-- created jobs
-- claimed jobs
-- completed jobs
-- retried jobs
-- failed jobs
 
 ### Graceful shutdown
 
@@ -239,8 +207,7 @@ The .NET baseline must include:
 - unit tests for state transitions and retry logic
 - unit tests for validation and idempotency
 - integration tests for the HTTP contract
-- persistence tests for database behavior
-- at least one concurrency test for multiple claim attempts
+- repository and worker behavior tests
 
 ### Acceptance bar
 
@@ -249,8 +216,6 @@ A feature is not complete unless it is verified by tests and manual smoke checks
 ## 10. Non-Functional Requirements
 
 - The application must be runnable locally with documented commands.
-- The service must build into a small container image.
-- The container must run as a non-root user.
 - The service must remain deterministic enough for repeatable tests.
 - The baseline must separate domain behavior from infrastructure concerns in a way that can be ported cleanly to Go.
 
@@ -263,9 +228,8 @@ The .NET application will be considered ready for migration when all of the foll
 - state transitions are enforced by tests
 - retry and lease semantics are implemented and verified
 - health endpoints respond correctly
-- concurrency safeguards are tested
-- logs and counters are present
-- Docker startup works and runs as non-root
+- worker cancellation and retry behavior are tested
+- basic structured logs are present
 - the behavior is frozen before the Go implementation begins
 
 ## 12. Stair-step Implementation Sequence
@@ -274,11 +238,11 @@ The work shall proceed in phases:
 
 1. Define API contract and configuration contract.
 2. Build the domain and state machine.
-3. Add persistence and migrations.
+3. Add the repository boundary and in-memory storage.
 4. Implement web endpoints and validation.
-5. Add worker lifecycle and retry logic.
-6. Add health, logging, metrics, and shutdown behavior.
-7. Validate with unit and integration tests.
+5. Add worker lifecycle, retry logic, and cancellation.
+6. Add health, basic logging, and shutdown behavior.
+7. Validate with unit and HTTP contract tests.
 8. Freeze the contract for the Go port.
 
 ## 13. Success Criteria
@@ -288,5 +252,15 @@ The .NET application is successful when it qualifies as a trustworthy baseline f
 - behavior is deterministic
 - tests exercise the intended contract
 - failure and retry semantics are documented and repeatable
-- local startup and container execution are straightforward
+- local startup is straightforward
 - the Go implementation can match the same external behavior without redesigning the domain
+
+## CONSIDERATIONS BEYOND PROJECT SCOPE:
+
+The following topics are intentionally excluded from the presentation-focused implementation. They are relevant for a production migration but must not block the .NET baseline or Go port:
+
+- PostgreSQL persistence, schema migrations, and database-backed readiness.
+- Transaction-safe concurrent claiming and lease-recovery integration tests.
+- Metrics, distributed tracing, correlation middleware, and alerting.
+- Docker, Docker Compose, non-root packaging, and image comparisons.
+- Authentication, authorization, external queues, Kubernetes, load testing, and exactly-once processing.

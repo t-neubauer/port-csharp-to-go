@@ -4,15 +4,16 @@ Date: 2026-09-01
 
 ## Current status
 
-The project has moved from planning into setup. The repository now contains the basic .NET foundation needed to build the job-dispatch reference implementation before porting it to Go.
+The project has moved from planning into the presentation-focused implementation. The repository contains a working .NET reference application that can be frozen and ported to Go.
 
 ## What has been created
 
 - The migration plan lives in [docs/MIGRATION_PLAN.md](MIGRATION_PLAN.md).
+- The migration effort log lives in [docs/MIGRATION_EFFORTS.md](MIGRATION_EFFORTS.md).
 - A .NET solution scaffold was created under [.NetProject/JobDispatch.slnx](../.NetProject/JobDispatch.slnx).
-- A baseline API project was created under [.NetProject/src/JobDispatch.Api](../.NetProject/src/JobDispatch.Api).
+- A presentation-focused baseline API project was created under [.NetProject/src/JobDispatch.Api](../.NetProject/src/JobDispatch.Api).
 - A test project using NUnit 4 was created under [.NetProject/tests/JobDispatch.Tests](../.NetProject/tests/JobDispatch.Tests).
-- The API project is the default ASP.NET Core Web API template, ready for the job-dispatch domain work.
+- The API project implements the job-dispatch domain, HTTP contract, in-memory repository, worker path, health endpoints, and focused tests.
 
 ## Verified setup
 
@@ -26,8 +27,12 @@ Result: 1 test run passed, 0 failed.
 
 ## Current interpretation
 
-This is the infrastructure phase, not the MVP implementation yet. The team now has a working .NET baseline shell and a test harness that is ready for the domain, HTTP contract, persistence, and worker behavior required by the migration plan.
+The presentation-focused .NET baseline is implemented: it includes the lifecycle API, state machine, in-memory repository, retry behavior, worker path, health endpoints, and focused tests. The broader production topics remain explicitly deferred.
 
 ## Next milestone
 
-The next step is to turn the API skeleton into the real Job Dispatch domain: define the contract, build the job lifecycle state machine, add repository support, and then validate the baseline behavior before the Go port begins.
+The next step is to freeze the presentation contract, then port the same vertical slice to Go while documenting the differences in composition, error handling, and cancellation.
+
+## CONSIDERATIONS BEYOND PROJECT SCOPE:
+
+Future engineering work may add PostgreSQL, schema migrations, transactional concurrency, metrics, tracing, Docker, Kubernetes, authentication, external queues, and performance comparisons. These are not prerequisites for the short presentation.

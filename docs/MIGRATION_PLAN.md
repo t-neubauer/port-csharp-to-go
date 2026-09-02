@@ -19,32 +19,7 @@ The .NET project currently provides a working HTTP and domain reference for the 
 
 Therefore, **the Go port must not begin until the presentation-focused .NET contract-freeze checkpoint is completed**. That checkpoint freezes the lifecycle API, state machine, errors, retry/idempotency behavior, worker behavior, health responses, and known gaps. PostgreSQL is a separate stretch track and must not delay the Go port.
 
-The following decisions must be recorded before the database-backed slice is started:
-
-| Decision | Required outcome | Default if not otherwise agreed |
-|---|---|---|
-| Go version | Pinned toolchain in `go.mod` and documentation | Current supported stable Go version available in the environment |
-| Database | Same relational engine for .NET and Go | PostgreSQL |
-| Migration tool | One repeatable CLI/library and checked-in migrations | `golang-migrate`-compatible SQL migrations |
-| HTTP routing | Standard library or one small pinned router | `net/http` with `http.ServeMux` unless route constraints require otherwise |
-| Observability | Structured logger and metrics approach | `log/slog` plus Prometheus-compatible counters |
-| Migration ownership | Exactly one component owns startup migrations | Application startup in local MVP; document how production would differ |
-| Worker model | One in-process worker loop for MVP | One worker per service instance, at-least-once processing |
-
-If a default is used, record it in the migration effort log and keep the choice consistent in both implementations.
-
-### Confirmed technology decisions
-
-The initial decisions for this migration are:
-
-- **Database:** PostgreSQL.
-- **Migration format/tool:** `golang-migrate`-compatible SQL migrations, used consistently by both implementations.
-- **Go HTTP routing:** standard library `net/http` with `http.ServeMux`.
-- **Observability:** `log/slog` plus Prometheus-compatible counters.
-- **Migration ownership:** the API application runs pending migrations during startup. Readiness remains unhealthy until the database is reachable and migrations have completed.
-- **Go version:** use the current stable version available in the environment and pin it in `go.mod` when the Go project is created.
-
-The application-startup migration choice is intended to keep the local MVP easy to run with one command. A production deployment may later move migrations to a separate release step; that is an operational distinction and must not change the schema or API contract.
+For the presentation path, record only the Go version, module path, local run command, and standard-library HTTP routing before implementation. Database, migration, metrics, and deployment decisions are retained at the end of this document as future engineering considerations.
 
 ## Objectives
 
@@ -136,21 +111,19 @@ The application is small enough to finish in six days, but it makes the migratio
 
 - HTTP contracts, validation, status codes, and error payloads.
 - Dependency composition and lifecycle management.
-- Environment-based configuration and startup validation.
-- SQL persistence, transactions, schema migration, and optimistic/concurrent claiming.
+- Basic environment-based configuration.
 - Background workers, cancellation, retry backoff, and idempotency.
-- Structured logs, request correlation, and basic metrics or traces.
+- Basic structured logs and health checks.
 - Liveness/readiness health checks and graceful shutdown.
-- Container builds, non-root execution, and reproducible local startup.
+- Reproducible local startup.
 
 ### Contract decisions
 
 - Define exact request and response fields, UTC timestamp rules, status codes, and the error payload on Day 1.
-- Use one relational database and one migration tool in both implementations. The schema includes `attempt_count`, `max_attempts`, `next_attempt_at`, `lease_owner`, `lease_expires_at`, and terminal timestamps.
-- Claiming is a transaction that takes an expiring lease. A worker crash makes an expired lease claimable again; work is at-least-once, not exactly-once.
+- Claiming uses an expiring in-memory lease for the demonstrated single-process scenarios.
 - Retry uses a fixed, documented bounded backoff. Attempts increment when a claim is made, and exhausted jobs become terminally failed.
-- Readiness means the database is reachable and migrations have completed. Liveness has no database dependency.
-- The MVP supports one service instance and one worker loop. Distributed coordination is explicitly deferred.
+- Readiness confirms that the service is running; liveness has no external dependency.
+- The presentation supports one service instance and one worker loop.
 - The worker stops polling on shutdown, rejects new claims, and waits a bounded timeout for in-flight work before exiting.
 
 ### Deliberate exclusions
@@ -163,29 +136,6 @@ These are outside the six-day MVP unless the core path finishes early:
 - Kubernetes production deployment.
 - High-scale performance tuning or distributed tracing infrastructure.
 - Exactly-once delivery claims. The design should document at-least-once processing and make handlers idempotent.
-
-## Broader Engineering MVP Acceptance Criteria
-
-This section describes the fuller production-shaped target. It is intentionally broader than the presentation-ready target below and should be treated as optional stretch work when the six-day timebox is used for a short presentation.
-
-The MVP is complete only when all of the following are true for both implementations, unless explicitly marked as a known parity gap:
-
-- A clean checkout starts the service and database with documented commands.
-- The API exposes the five job operations above plus `/health/live` and `/health/ready`.
-- Invalid requests return consistent, documented `4xx` responses; unknown jobs return `404`.
-- Job transitions enforce valid state changes and cannot claim the same queued job concurrently.
-- A transient failure retries with bounded attempts and deterministic backoff; exhaustion produces a terminal failed state.
-- Repeating a completion or failure request is idempotent and does not corrupt state.
-- Configuration is supplied through environment variables with documented defaults and startup validation for required values.
-- Logs are structured and include request correlation plus job identifiers where applicable.
-- Metrics include named counters for created, claimed, completed, retried, and failed jobs; distributed tracing is deferred.
-- Graceful shutdown stops new work and allows in-flight work to finish within a bounded timeout.
-- Unit tests cover state transitions, retry policy, validation, and idempotency.
-- Integration tests cover the HTTP contract, persistence, health endpoints, and at least one concurrent-claim case.
-- Both services build into small runnable containers and run as a non-root user.
-- A parity checklist records endpoint behavior, persistence behavior, worker behavior, and known differences.
-
-A feature is not MVP-complete merely because it compiles. The acceptance evidence must include test results and a short manual smoke test for each implementation.
 
 ## Presentation-Ready Acceptance Criteria
 
@@ -202,17 +152,17 @@ The presentation-critical implementation is complete when both implementations:
 
 The short presentation does not require a database-backed implementation, full production observability, Docker Compose, or performance claims.
 
-## Requirements Matrix
+## Presentation Requirements Matrix
 
 | Area | MVP requirement | Evidence |
 |---|---|---|
 | API | Create, read, claim, complete, and fail jobs | Contract tests and curl/http examples |
 | Domain | Explicit state machine with legal transitions | Unit tests |
-| Storage | Relational schema, migrations, repository boundary, transaction for claiming | Integration tests |
+| Storage | Repository boundary and deterministic in-memory storage | Unit and contract tests |
 | Worker | Poll, claim, process, retry, stop on cancellation | Worker tests and logs |
 | Reliability | Idempotent terminal operations and bounded retries | Repeated-request and retry tests |
-| Operations | Configuration, structured logs, correlation, counters, liveness/readiness | Configuration test and captured output |
-| Delivery | Docker build and local compose startup | Build/run command and smoke test |
+| Operations | Configuration, basic structured logs, liveness/readiness, cancellation | Focused tests and captured output |
+| Delivery | Documented local startup | Run command and smoke test |
 | Migration | Equivalent Go behavior and documented divergences | Parity checklist |
 
 ## Six-Day Execution Plan
@@ -221,7 +171,7 @@ The short presentation does not require a database-backed implementation, full p
 
 **Goal:** remove ambiguity before implementation.
 
-- Lock the versions, repository layout, database choice, migration tool, schema, and local run commands.
+- Lock the Go version, repository layout, and local run commands. Record database and migration choices only as future considerations.
 - Define the job state machine, request/response schemas, error format, retry rules, and configuration keys.
 - Define the claim transaction, lease expiry behavior, UTC timestamp rules, and who runs migrations.
 - Create the .NET solution, projects, dependency composition, and health endpoints. Add container setup only on the broader engineering track.
@@ -407,16 +357,6 @@ The working rule is to freeze behavior after Day 3. New features after that poin
 | Language comparisons become subjective | Capture the same commands, scenarios, and metrics for both implementations. |
 | Concurrency behavior differs subtly | Use a shared concurrent-claim test and inspect database effects, not only HTTP responses. |
 
-## Stretch Goals
-
-Only start these after every MVP criterion passes:
-
-- OpenTelemetry exporter or a richer trace demonstration.
-- A real queue adapter behind the processing boundary.
-- Authentication middleware with one protected endpoint.
-- Kubernetes manifests for deployment, probes, and configuration.
-- A load-test scenario with a short interpretation of results.
-
 ## Presentation Outline
 
 1. Problem and scope: why this service was chosen for a meaningful port.
@@ -430,3 +370,26 @@ Only start these after every MVP criterion passes:
 ## Presentation Definition of Done
 
 The project is ready for the short presentation when a reviewer can clone the repository, follow the documented local commands, start either implementation, run the focused lifecycle verification steps, understand the three intentional .NET-to-Go differences, and see evidence that the .NET behavior was frozen before the Go port began. Broader persistence, deployment, and observability work must be listed separately as deferred engineering considerations.
+
+## CONSIDERATIONS BEYOND PROJECT SCOPE: Broader Engineering MVP
+
+The following fuller production-shaped target is intentionally excluded from the presentation-critical path. It may be pursued only after the in-memory lifecycle demo, focused tests, migration documentation, and presentation evidence are complete:
+
+- PostgreSQL persistence, SQL migrations, database-backed readiness, and transactional concurrent claiming.
+- Lease recovery integration tests and multi-instance coordination.
+- Startup validation for database settings, Prometheus metrics, distributed tracing, and extensive correlation infrastructure.
+- Graceful production deployment, Docker Compose, non-root images, image-size comparisons, and performance benchmarking.
+- Authentication, external queues, Kubernetes, load testing, and exactly-once side-effect protection.
+
+If implemented, these features require their own parity evidence and must not change the presentation contract.
+
+## CONSIDERATIONS BEYOND PROJECT SCOPE: Stretch Topics
+
+Optional follow-up demonstrations include a real queue adapter, an OpenTelemetry exporter, one protected endpoint, Kubernetes manifests, and a small load-test scenario. These topics are not required for the short presentation.
+
+The previously identified broader technology decisions remain available if the project is expanded:
+
+- PostgreSQL as the shared relational database.
+- `golang-migrate`-compatible SQL migrations.
+- `log/slog` plus Prometheus-compatible counters.
+- Application-startup migrations for a one-command local setup, with readiness depending on database connectivity and migration completion.

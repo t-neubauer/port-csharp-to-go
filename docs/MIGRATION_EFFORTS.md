@@ -6,11 +6,8 @@ The .NET application is the behavioral reference. A difference in syntax or fram
 
 ## Confirmed migration decisions
 
-- PostgreSQL is the shared relational database.
-- Both implementations use `golang-migrate`-compatible SQL migration files.
 - Go HTTP routing uses the standard library `net/http` and `http.ServeMux`.
-- Go observability uses `log/slog` and Prometheus-compatible counters.
-- The API application runs pending migrations during startup for the local MVP; readiness is healthy only after migration completion.
+- Go observability uses basic `log/slog` logging.
 - The Go toolchain will be pinned in `go.mod` using the current stable version available in the environment.
 
 ## Presentation rule
@@ -23,7 +20,7 @@ Prefer three deep comparisons over a catalog of every file:
 2. How C# exceptions and framework responses map to returned Go errors and HTTP error mapping.
 3. How `BackgroundService` and cancellation tokens map to a Go worker, `context.Context`, and graceful shutdown.
 
-Database migrations, metrics, deployment, and performance can be summarized as future work unless one is selected as a single stretch demonstration.
+Database, metrics, deployment, and performance can be summarized as future work.
 
 ## How to use this document
 
@@ -45,11 +42,10 @@ Use short examples and link to source files rather than copying large code block
 | Contract and decisions | `.NetProject/` | `docs/MIGRATION_PLAN.md` | Contract-freeze checklist | Not started |
 | Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | Start/stop smoke test | Not started |
 | Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests | Not started |
-| Persistence and migrations | Planned SQL repository | `GoProject/internal/repository/`, `migrations/` | Integration tests | Not started |
+| Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Unit and contract tests | Not started |
 | HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Shared contract tests | Not started |
 | Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | Not started |
-| Health and operations | Health mappings and logging | `GoProject/internal/health/`, middleware, metrics | Health/shutdown/smoke checks | Not started |
-| Container delivery | Planned .NET image | `GoProject/Dockerfile` | Build and non-root run | Not started |
+| Health and operations | Health mappings and basic logging | `GoProject/internal/health/`, middleware | Health/shutdown/smoke checks | Not started |
 
 ## Go concepts used in this project
 
@@ -95,6 +91,8 @@ Describe the meaningful difference without claiming that different syntax is a b
 
 Explain any new Go concept needed to understand this slice.
 
-## Intentional differences
+## CONSIDERATIONS BEYOND PROJECT SCOPE: Intentional Differences and Future Work
 
 Record approved differences here with a reason and the evidence that the user-visible contract remains equivalent. Do not use this section to hide unfinished work; unfinished work belongs in the migration status table and the plan's gap list.
+
+Potential future slices include PostgreSQL persistence, SQL migrations, database-backed readiness, Prometheus metrics, distributed tracing, Docker packaging, and image comparisons. These are not required to complete the short presentation.
