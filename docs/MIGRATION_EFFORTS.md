@@ -40,10 +40,10 @@ Use short examples and link to source files rather than copying large code block
 | Slice | .NET reference | Go implementation | Parity evidence | Status |
 |---|---|---|---|---|
 | Contract and decisions | `.NetProject/CONTRACT_FREEZE.md` | `docs/MIGRATION_PLAN.md` | `dotnet test .NetProject/JobDispatch.slnx --no-restore --nologo` (9 passed) | Complete |
-| Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | Start/stop smoke test | Not started |
-| Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests | Not started |
-| Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Unit and contract tests | Not started |
-| HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Shared contract tests | Not started |
+| Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | `go test ./...`; shutdown wiring present | In progress |
+| Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Create/read unit tests | In progress |
+| Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Repository-backed service tests | In progress |
+| HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Create/read HTTP contract test | In progress |
 | Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | Not started |
 | Health and operations | Health mappings and basic logging | `GoProject/internal/health/`, middleware | Health/shutdown/smoke checks | Not started |
 
@@ -58,6 +58,40 @@ This section will grow as the port introduces concepts. Keep explanations practi
 - **`context.Context`:** a request-scoped or process-scoped signal carrying cancellation and deadlines. The worker and database calls use it to stop promptly during shutdown.
 - **Goroutine:** a lightweight concurrent function execution. The worker runs concurrently with the HTTP server.
 - **Channel:** a typed communication mechanism between goroutines. Use one only when it clarifies coordination; a context and `sync.WaitGroup` may be sufficient for this MVP.
+
+## 2026-09-02 — Module, create, and read slices
+
+**Reference behavior**
+
+`POST /jobs` creates a queued job with a generated identifier, timestamps, default attempts, and payload. `GET /jobs/{id}` returns the stored job or a stable not-found error.
+
+**.NET implementation**
+
+- `Program.cs` composes the application through ASP.NET Core dependency injection.
+- `Services/JobService.cs` owns validation and job creation.
+- `Services/InMemoryJobRepository.cs` stores jobs in a concurrent dictionary.
+
+**Go implementation**
+
+- `cmd/jobdispatch/main.go` explicitly constructs the repository, service, handler, and HTTP server.
+- `internal/domain` contains plain structs and JSON tags.
+- `internal/repository` protects the map with `sync.RWMutex`.
+- `internal/service` returns ordinary Go `error` values.
+- `internal/httpapi` maps service errors to HTTP responses.
+
+**What is different and why**
+
+Go has no framework-wide dependency-injection container in this implementation. Construction is visible in `main`, which makes dependencies easy to trace for a presentation and keeps the runtime behavior explicit.
+
+**Parity evidence**
+
+- Test: `Set-Location GoProject; go test ./...`
+- Result: all create/read service and HTTP tests pass.
+- Known gap: claim, complete, fail, worker, and full configuration parity are the next slices.
+
+**Learning notes**
+
+`context.Context` is passed into repository and service calls so cancellation can be honored later. `sync.RWMutex` allows multiple readers while preventing concurrent map writes.
 
 ## Entry template
 
