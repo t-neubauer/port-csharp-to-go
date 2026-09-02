@@ -29,7 +29,9 @@ public sealed class InMemoryJobRepository : IJobRepository
     public Task<IReadOnlyCollection<JobModel>> GetEligibleJobsAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         var jobs = _jobs.Values
-            .Where(job => job.Status == JobStatusValue.Queued)
+            .Where(job =>
+                (job.Status == JobStatusValue.Queued && (!job.NextAttemptAt.HasValue || job.NextAttemptAt.Value <= now)) ||
+                (job.Status == JobStatusValue.Claimed && (!job.LeaseExpiresAt.HasValue || job.LeaseExpiresAt.Value <= now)))
             .OrderBy(job => job.CreatedAt)
             .ToList();
 

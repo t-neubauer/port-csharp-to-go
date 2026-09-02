@@ -1,6 +1,6 @@
 # .NET Project Status
 
-Date: 2026-09-01
+Date: 2026-09-02
 
 ## Summary of accomplishments
 
@@ -21,6 +21,11 @@ Key accomplishments:
 - Added request and response model adjustments to support the expected JSON contract, including compatibility for `jobType` and `maxAttempts` payload shapes.
 - Added a focused NUnit test suite under `.NetProject/tests/JobDispatch.Tests` covering create/read flow, claim/complete/fail transitions, retry and terminal idempotency, and health checks.
 - Added the project entrypoint and solution metadata so the baseline can be built and run directly from the workspace.
+- Corrected in-memory eligibility so retry backoff and expired-lease recovery are enforced by the repository.
+- Made `leaseSeconds` explicit: it overrides the configured lease duration when provided.
+- Added startup validation for presentation configuration values.
+- Added focused behavior tests for due retries, expired leases, request lease duration, worker processing, cancellation through shutdown, and invalid options.
+- Added the frozen reference contract in `.NetProject/CONTRACT_FREEZE.md`.
 
 ## Validation results
 
@@ -40,13 +45,13 @@ This confirms the core API contract is functioning as expected in the current re
 
 ## Project status
 
-Status: Complete for the presentation-focused reference implementation and suitable for contract freeze before the Go port.
+Status: Complete and contract-frozen for the presentation-focused reference implementation.
 
 Current assessment:
 
 - The .NET job dispatch reference is implemented and matches the presentation target lifecycle behavior.
-- The API contract is stable enough to serve as a migration baseline.
-- The NUnit suite is in place and passing, which gives confidence in the domain behavior.
+- The API, state machine, retry/lease behavior, worker behavior, configuration rules, and known gaps are documented in the contract-freeze artifact.
+- The NUnit suite is in place and passing, covering the HTTP contract and focused in-memory/worker behavior.
 - Broader persistence, observability, and containerization work is intentionally outside the presentation scope.
 
 ## Prometheus evaluation
@@ -60,7 +65,7 @@ Prometheus review:
 
 Overall conclusion:
 
-The .NET project is in a solid presentation baseline state: implemented, tested, and suitable as the reference model for the Go migration effort.
+The .NET project is a solid presentation baseline: implemented, tested, contract-frozen, and ready to serve as the reference model for the Go migration effort.
 
 ## CONSIDERATIONS BEYOND PROJECT SCOPE:
 

@@ -60,6 +60,14 @@ public sealed class JobService : IJobService
         var job = await GetJobAsync(jobId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var leaseOwner = string.IsNullOrWhiteSpace(request?.LeaseOwner) ? (string.IsNullOrWhiteSpace(request?.WorkerId) ? (string.IsNullOrWhiteSpace(request?.Worker) ? "worker" : request.Worker) : request.WorkerId) : request.LeaseOwner;
+        var leaseDuration = request?.LeaseSeconds is null
+            ? _options.LeaseDuration
+            : TimeSpan.FromSeconds(request.LeaseSeconds.Value);
+
+        if (leaseDuration <= TimeSpan.Zero)
+        {
+            throw new ValidationJobDispatchException("lease_seconds must be greater than zero.");
+        }
 
         if (job.Status == JobStatus.Completed)
         {
@@ -81,7 +89,7 @@ public sealed class JobService : IJobService
             job.Status = JobStatus.Claimed;
             job.AttemptCount += 1;
             job.LeaseOwner = leaseOwner;
-            job.LeaseExpiresAt = now.Add(_options.LeaseDuration);
+            job.LeaseExpiresAt = now.Add(leaseDuration);
             job.NextAttemptAt = null;
             job.UpdatedAt = now;
             await _repository.UpdateAsync(job, cancellationToken);

@@ -8,5 +8,5 @@ public sealed class ClaimJobRequest
 
     public string? Worker { get; set; }
 
-    public int LeaseSeconds { get; set; } = 30;
+    public int? LeaseSeconds { get; set; }
 }

@@ -39,7 +39,7 @@ Use short examples and link to source files rather than copying large code block
 
 | Slice | .NET reference | Go implementation | Parity evidence | Status |
 |---|---|---|---|---|
-| Contract and decisions | `.NetProject/` | `docs/MIGRATION_PLAN.md` | Contract-freeze checklist | Not started |
+| Contract and decisions | `.NetProject/CONTRACT_FREEZE.md` | `docs/MIGRATION_PLAN.md` | `dotnet test .NetProject/JobDispatch.slnx --no-restore --nologo` (9 passed) | Complete |
 | Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | Start/stop smoke test | Not started |
 | Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests | Not started |
 | Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Unit and contract tests | Not started |

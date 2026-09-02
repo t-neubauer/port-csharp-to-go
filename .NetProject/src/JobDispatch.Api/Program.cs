@@ -15,7 +15,9 @@ public class Program
         builder.Services.AddOpenApi();
 
         builder.Services.AddOptions<JobDispatchOptions>()
-            .Bind(builder.Configuration.GetSection(JobDispatchOptions.SectionName));
+            .Bind(builder.Configuration.GetSection(JobDispatchOptions.SectionName))
+            .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<JobDispatchOptions>, JobDispatchOptions>();
         builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<JobDispatchOptions>>().Value);
         builder.Services.AddSingleton<IJobRepository, InMemoryJobRepository>();
         builder.Services.AddSingleton<IJobService, JobService>();

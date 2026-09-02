@@ -195,6 +195,10 @@ dotnet run --project .\src\JobDispatch.Api\JobDispatch.Api.csproj --urls http://
 
 The worker polls for eligible jobs, claims them, and then either completes or fails them according to the service logic.
 
+Queued jobs are eligible only when `nextAttemptAt` is due. Claimed jobs whose lease has expired are also eligible, allowing the worker to recover abandoned in-memory work. The optional `leaseSeconds` claim field overrides the configured lease duration for that claim; when omitted, `JobDispatch:LeaseDuration` is used.
+
+The frozen presentation contract is documented in [CONTRACT_FREEZE.md](CONTRACT_FREEZE.md).
+
 ## API contract summary
 
 - `POST /jobs` creates a queued job
@@ -210,6 +214,7 @@ The worker polls for eligible jobs, claims them, and then either completes or fa
 - The request model accepts the canonical `jobType` and `maxAttempts` payload shape, and also supports compatibility aliases used by the service layer.
 - Retry logic is bounded and deterministic: transient failures retry until `maxAttempts` is exhausted.
 - Errors return consistent payloads with a code and message, and invalid state transitions produce `4xx` responses.
+- Startup validates the `JobDispatch` options section and rejects invalid durations or attempt limits.
 
 ## CONSIDERATIONS BEYOND PROJECT SCOPE:
 

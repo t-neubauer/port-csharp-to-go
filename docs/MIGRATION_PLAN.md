@@ -10,14 +10,14 @@ This is intentionally more representative than a CRUD sample. It creates a stabl
 
 ## Current Readiness and Open Decisions
 
-The .NET project currently provides a working HTTP and domain reference for the presentation-focused path, but it is not yet a complete implementation of every broader engineering requirement in this plan:
+The .NET project now provides a working, tested, and contract-frozen HTTP and domain reference for the presentation-focused path. It is not intended to implement every broader engineering requirement in this plan:
 
 - The repository is currently `InMemoryJobRepository`; relational persistence, schema migrations, and a database-backed readiness check remain to be implemented.
-- The worker exists and is disabled by default, but worker behavior needs stronger tests for cancellation, retry timing, and lease recovery.
-- The current test suite covers the main HTTP lifecycle and terminal idempotency, but does not yet provide the required persistence or concurrent-claim integration tests.
-- Structured job logs are present. Correlation IDs, named metrics, startup validation, Docker/non-root execution, and bounded graceful shutdown still need explicit acceptance evidence.
+- The worker is disabled by default, and its due-retry, expired-lease recovery, and host-cancellation behavior are covered by focused tests.
+- The current test suite intentionally does not provide persistence or transactional concurrent-claim integration tests because those belong to the deferred production track.
+- Structured job logs and startup option validation are present. Correlation IDs, named metrics, Docker/non-root execution, and production drain timeouts remain deferred.
 
-Therefore, **the Go port must not begin until the presentation-focused .NET contract-freeze checkpoint is completed**. That checkpoint freezes the lifecycle API, state machine, errors, retry/idempotency behavior, worker behavior, health responses, and known gaps. PostgreSQL is a separate stretch track and must not delay the Go port.
+The presentation-focused .NET contract-freeze checkpoint is complete in `.NetProject/CONTRACT_FREEZE.md`. The Go port can begin against that frozen behavior. PostgreSQL is a separate stretch track and must not delay the Go port.
 
 For the presentation path, record only the Go version, module path, local run command, and standard-library HTTP routing before implementation. Database, migration, metrics, and deployment decisions are retained at the end of this document as future engineering considerations.
 

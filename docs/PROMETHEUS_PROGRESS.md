@@ -1,6 +1,6 @@
 # Prometheus Progress Log
 
-Date: 2026-09-01
+Date: 2026-09-02
 
 ## Current status
 
@@ -31,7 +31,7 @@ The presentation-focused .NET baseline is implemented: it includes the lifecycle
 
 ## Next milestone
 
-The next step is to freeze the presentation contract, then port the same vertical slice to Go while documenting the differences in composition, error handling, and cancellation.
+The presentation contract is frozen in [.NetProject/CONTRACT_FREEZE.md](../.NetProject/CONTRACT_FREEZE.md). The next step is to port the same vertical slice to Go while documenting the differences in composition, error handling, and cancellation.
 
 ## CONSIDERATIONS BEYOND PROJECT SCOPE:
 
