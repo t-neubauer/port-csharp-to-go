@@ -18,7 +18,11 @@ import (
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	repo := repository.NewInMemoryJobRepository()
-	jobService := service.NewJobService(repo, service.Options{DefaultMaxAttempts: 3})
+	jobService := service.NewJobService(repo, service.Options{
+		DefaultMaxAttempts: 3,
+		LeaseDuration:      5 * time.Minute,
+		RetryBackoff:       30 * time.Second,
+	})
 	handler := httpapi.NewHandler(jobService, logger)
 
 	server := &http.Server{

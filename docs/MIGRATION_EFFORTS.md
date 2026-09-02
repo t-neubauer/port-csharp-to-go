@@ -41,9 +41,9 @@ Use short examples and link to source files rather than copying large code block
 |---|---|---|---|---|
 | Contract and decisions | `.NetProject/CONTRACT_FREEZE.md` | `docs/MIGRATION_PLAN.md` | `dotnet test .NetProject/JobDispatch.slnx --no-restore --nologo` (9 passed) | Complete |
 | Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | `go test ./...`; shutdown wiring present | In progress |
-| Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Create/read unit tests | In progress |
+| Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests for claim/complete/retry/idempotency | In progress |
 | Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Repository-backed service tests | In progress |
-| HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Create/read HTTP contract test | In progress |
+| HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Create/read/claim/complete contract tests | In progress |
 | Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | Not started |
 | Health and operations | Health mappings and basic logging | `GoProject/internal/health/`, middleware | Health/shutdown/smoke checks | Not started |
 
@@ -92,6 +92,29 @@ Go has no framework-wide dependency-injection container in this implementation. 
 **Learning notes**
 
 `context.Context` is passed into repository and service calls so cancellation can be honored later. `sync.RWMutex` allows multiple readers while preventing concurrent map writes.
+
+## 2026-09-02 — State machine slice
+
+**Reference behavior**
+
+Claims add a lease and increment attempts. Live leases reject competing claims; expired leases can be claimed again. Completion is idempotent for completed jobs. Transient failures schedule a retry, while non-transient or exhausted failures become terminal.
+
+**Go implementation**
+
+- `internal/domain/job.go` defines lifecycle statuses and request types.
+- `internal/service/job_service.go` implements transitions and sentinel errors.
+- `internal/repository/memory.go` adds update and eligibility operations behind the repository interface.
+- `internal/httpapi/handler.go` exposes claim, complete, and fail routes.
+
+**What is different and why**
+
+Expected failures are returned as Go `error` values and classified with `errors.Is`; there is no exception hierarchy. The HTTP layer translates those errors into the frozen status codes and error codes.
+
+**Parity evidence**
+
+- Test: `Set-Location GoProject; go test ./...`
+- Result: all Go tests pass, including claim conflict, retry, completion idempotency, and HTTP lifecycle coverage.
+- Known gap: the background worker is the next slice.
 
 ## Entry template
 

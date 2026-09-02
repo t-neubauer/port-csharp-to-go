@@ -21,6 +21,9 @@ func NewHandler(jobService *service.JobService, logger *slog.Logger) http.Handle
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /jobs", h.createJob)
 	mux.HandleFunc("GET /jobs/{id}", h.getJob)
+	mux.HandleFunc("POST /jobs/{id}/claim", h.claimJob)
+	mux.HandleFunc("POST /jobs/{id}/complete", h.completeJob)
+	mux.HandleFunc("POST /jobs/{id}/fail", h.failJob)
 	mux.HandleFunc("GET /health/live", h.live)
 	mux.HandleFunc("GET /health/ready", h.ready)
 	return mux
@@ -50,6 +53,48 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
+func (h *Handler) claimJob(w http.ResponseWriter, r *http.Request) {
+	var request domain.ClaimJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "request body is invalid")
+		return
+	}
+	job, err := h.service.ClaimJob(r.Context(), r.PathValue("id"), request)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func (h *Handler) completeJob(w http.ResponseWriter, r *http.Request) {
+	var request domain.CompleteJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "request body is invalid")
+		return
+	}
+	job, err := h.service.CompleteJob(r.Context(), r.PathValue("id"), request)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func (h *Handler) failJob(w http.ResponseWriter, r *http.Request) {
+	var request domain.FailJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "request body is invalid")
+		return
+	}
+	job, err := h.service.FailJob(r.Context(), r.PathValue("id"), request)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
 func (h *Handler) live(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "live"})
 }
@@ -64,6 +109,8 @@ func (h *Handler) writeServiceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "JOB_NOT_FOUND", err.Error())
 	case errors.Is(err, service.ErrValidation):
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+	case errors.Is(err, service.ErrInvalidState):
+		writeError(w, http.StatusConflict, "INVALID_JOB_STATE", err.Error())
 	default:
 		h.logger.Error("job_request_failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "an internal error occurred")
