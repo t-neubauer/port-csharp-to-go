@@ -41,10 +41,10 @@ Use short examples and link to source files rather than copying large code block
 |---|---|---|---|---|
 | Contract and decisions | `.NetProject/CONTRACT_FREEZE.md` | `docs/MIGRATION_PLAN.md` | `dotnet test .NetProject/JobDispatch.slnx --no-restore --nologo` (9 passed) | Complete |
 | Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | `go test ./...`; `scripts/smoke-test.ps1` | Complete |
-| Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests for claim/complete/retry/idempotency | In progress |
-| Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Repository-backed service tests | In progress |
+| Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Parity tests for transitions, leases, retries, and idempotency | Complete |
+| Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Repository-backed service and eligibility tests | Complete |
 | HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Lifecycle, error, and health contract tests | Complete |
-| Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | In progress |
+| Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Completion, retry, exhaustion, and cancellation tests | Complete |
 | Health and operations | Health mappings and basic logging | `GoProject/internal/httpapi/`, `cmd/jobdispatch` | Health contract tests and `scripts/smoke-test.ps1` | Complete |
 
 ## Go concepts used in this project
@@ -87,7 +87,7 @@ Go has no framework-wide dependency-injection container in this implementation. 
 
 - Test: `Set-Location GoProject; go test ./...`
 - Result: all create/read service and HTTP tests pass.
-- Known gap: claim, complete, fail, worker, and full configuration parity are the next slices.
+- This slice is covered by the state-machine and HTTP contract tests described below.
 
 **Learning notes**
 
@@ -114,7 +114,7 @@ Expected failures are returned as Go `error` values and classified with `errors.
 
 - Test: `Set-Location GoProject; go test ./...`
 - Result: all Go tests pass, including claim conflict, retry, completion idempotency, and HTTP lifecycle coverage.
-- Known gap: the background worker is the next slice.
+- Known gap: worker integration was completed in the following slice.
 
 ## 2026-09-02 — Background worker slice
 
@@ -137,7 +137,7 @@ Go does not provide an ASP.NET-style hosted-service abstraction here. The worker
 
 - Test: `Set-Location GoProject; go test ./...`
 - Result: all Go tests pass, including worker completion, retry scheduling, and cancellation.
-- Known gap: worker configuration is currently wired with presentation defaults; environment parsing and a process smoke test are next.
+- Known gap: configuration and process smoke coverage were completed in the following slice.
 
 **Learning notes**
 
@@ -167,6 +167,32 @@ Go configuration is parsed explicitly instead of using the ASP.NET configuration
 - Smoke test: `Set-Location GoProject; .\scripts\smoke-test.ps1`
 - Result: tests and the real-process lifecycle flow pass.
 - Known gap: the presentation-critical in-memory port is complete; database, metrics, tracing, containers, and other production features remain deferred.
+
+## 2026-09-02 — Parity hardening
+
+**Reference behavior**
+
+The Go implementation now has explicit evidence for the edge cases frozen by the .NET reference: retry timing, expired lease recovery, terminal failure, idempotency, and worker exhaustion.
+
+**Go implementation**
+
+- `internal/service/job_service_test.go` covers not-due retries, expired leases, non-transient terminal failure, and repeated terminal operations.
+- `internal/worker/worker_test.go` covers a `fail` job reaching terminal failure after attempts are exhausted.
+- `internal/httpapi/handler_test.go` covers the externally visible HTTP error and health contracts.
+
+**What is different and why**
+
+The behavior is intentionally equivalent. The tests use Go's direct function calls and `httptest` instead of ASP.NET's `WebApplicationFactory`, while preserving the same observable outcomes.
+
+**Parity evidence**
+
+- Test: `Set-Location GoProject; go test ./...`
+- Result: all Go packages pass.
+- Known gap: production persistence and distributed concurrency remain outside the presentation scope.
+
+**Learning notes**
+
+Parity hardening means testing edge cases against the .NET contract so implementation differences are deliberate rather than accidental.
 
 ## Entry template
 
