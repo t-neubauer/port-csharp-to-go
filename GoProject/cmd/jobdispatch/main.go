@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/config"
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/httpapi"
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/repository"
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/service"
@@ -18,20 +19,25 @@ import (
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	options, err := config.Load()
+	if err != nil {
+		logger.Error("configuration_invalid", "error", err)
+		return
+	}
 	repo := repository.NewInMemoryJobRepository()
 	jobService := service.NewJobService(repo, service.Options{
-		DefaultMaxAttempts: 3,
-		LeaseDuration:      5 * time.Minute,
-		RetryBackoff:       30 * time.Second,
+		DefaultMaxAttempts: options.DefaultMaxAttempts,
+		LeaseDuration:      options.LeaseDuration,
+		RetryBackoff:       options.RetryBackoff,
 	})
 	handler := httpapi.NewHandler(jobService, logger)
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
 	defer cancelWorker()
-	jobWorker := worker.New(jobService, 15*time.Minute, "background-worker", false, logger)
+	jobWorker := worker.New(jobService, options.WorkerPollInterval, "background-worker", options.WorkerEnabled, logger)
 	go jobWorker.Run(workerCtx)
 
 	server := &http.Server{
-		Addr:              ":8080",
+		Addr:              options.Addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

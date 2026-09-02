@@ -40,12 +40,12 @@ Use short examples and link to source files rather than copying large code block
 | Slice | .NET reference | Go implementation | Parity evidence | Status |
 |---|---|---|---|---|
 | Contract and decisions | `.NetProject/CONTRACT_FREEZE.md` | `docs/MIGRATION_PLAN.md` | `dotnet test .NetProject/JobDispatch.slnx --no-restore --nologo` (9 passed) | Complete |
-| Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | `go test ./...`; shutdown wiring present | In progress |
+| Module and process lifecycle | ASP.NET Core `Program.cs` | `GoProject/cmd/jobdispatch/main.go` | `go test ./...`; `scripts/smoke-test.ps1` | Complete |
 | Domain model and state machine | `Models/`, `Services/JobService.cs` | `GoProject/internal/domain/`, `internal/service/` | Unit tests for claim/complete/retry/idempotency | In progress |
 | Persistence boundary | In-memory repository | `GoProject/internal/repository/` | Repository-backed service tests | In progress |
-| HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Create/read/claim/complete contract tests | In progress |
+| HTTP API | Minimal API mappings in `Program.cs` | `GoProject/internal/httpapi/` | Lifecycle, error, and health contract tests | Complete |
 | Background worker | `Services/JobWorkerService.cs` | `GoProject/internal/worker/` | Cancellation/retry tests | In progress |
-| Health and operations | Health mappings and basic logging | `GoProject/internal/health/`, middleware | Health/shutdown/smoke checks | Not started |
+| Health and operations | Health mappings and basic logging | `GoProject/internal/httpapi/`, `cmd/jobdispatch` | Health contract tests and `scripts/smoke-test.ps1` | Complete |
 
 ## Go concepts used in this project
 
@@ -142,6 +142,31 @@ Go does not provide an ASP.NET-style hosted-service abstraction here. The worker
 **Learning notes**
 
 `time.Ticker` sends periodic events on a channel. A `select` waits for either the next tick or `ctx.Done()`, which is the idiomatic Go pattern for cancelable background work.
+
+## 2026-09-02 — Configuration, health, and contract parity slice
+
+**Reference behavior**
+
+The process accepts environment-based configuration, exposes timestamped health responses, and supports the complete create, claim, complete, and fail HTTP lifecycle with stable error codes.
+
+**Go implementation**
+
+- `internal/config/config.go` loads defaults and `JobDispatch__...` environment variables.
+- `internal/config/config_test.go` verifies parsing and validation.
+- `internal/httpapi/handler.go` includes UTC timestamps on health responses.
+- `internal/httpapi/handler_test.go` covers lifecycle, validation, not-found, failure idempotency, and health contracts.
+- `scripts/smoke-test.ps1` builds and runs the real process, checks readiness, executes a lifecycle flow, and stops the child process.
+
+**What is different and why**
+
+Go configuration is parsed explicitly instead of using the ASP.NET configuration provider pipeline. The smoke script makes process lifecycle behavior reproducible on Windows and demonstrates targeted child-process cleanup.
+
+**Parity evidence**
+
+- Tests: `Set-Location GoProject; go test ./...`
+- Smoke test: `Set-Location GoProject; .\scripts\smoke-test.ps1`
+- Result: tests and the real-process lifecycle flow pass.
+- Known gap: the presentation-critical in-memory port is complete; database, metrics, tracing, containers, and other production features remain deferred.
 
 ## Entry template
 

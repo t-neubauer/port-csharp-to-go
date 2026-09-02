@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/domain"
 	"github.com/t-neubauer/port-csharp-to-go/GoProject/internal/service"
@@ -96,11 +97,11 @@ func (h *Handler) failJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) live(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "live"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "live", "timestamp": time.Now().UTC()})
 }
 
 func (h *Handler) ready(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ready", "timestamp": time.Now().UTC()})
 }
 
 func (h *Handler) writeServiceError(w http.ResponseWriter, err error) {
